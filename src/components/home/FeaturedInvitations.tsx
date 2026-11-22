@@ -1,27 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Container } from '@/components/common/Container';
 import { SectionHeading } from '@/components/common/SectionHeading';
 import { TemplateCard } from '@/components/templates/TemplateCard';
+import { TemplatePreviewModal } from '@/components/templates/TemplatePreviewModal';
 import { SAMPLE_TEMPLATES } from '@/lib/constants/templates';
+import { Template } from '@/types/template';
 import { Button } from '@/components/common/Button';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles, FireExtinguisher as Fire } from 'lucide-react';
 
 export function FeaturedInvitations() {
-  const featured = SAMPLE_TEMPLATES.slice(0, 6);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'wedding' | 'birthday' | 'video' | 'other'>('all');
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const filteredTemplates = SAMPLE_TEMPLATES.filter((t) => {
+    if (activeFilter === 'all') return t.isTrending || t.isPopular;
+    if (activeFilter === 'video') return t.type === 'video';
+    return t.category === activeFilter;
+  }).slice(0, 6);
+
+  const handleOpenPreview = (template: Template) => {
+    setPreviewTemplate(template);
+    setIsModalOpen(true);
+  };
 
   return (
     <section className="py-20 bg-ivory-100/60 border-b border-gold-200/50">
       <Container>
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
           <div>
             <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-gold-100 text-gold-800 border border-gold-300/70 mb-3 tracking-wider uppercase">
               Trending Celebrations • ट्रेंडिंग निमंत्रण
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-royal-950 tracking-tight">
-              Popular Invitation Designs
+              Featured Invitation Designs
             </h2>
             <p className="font-hindi text-magenta-700 text-xl mt-1">
               लोगों द्वारा सबसे ज़्यादा पसंद किए गए कार्ड और वीडियो
@@ -36,10 +51,38 @@ export function FeaturedInvitations() {
           </div>
         </div>
 
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
+          {[
+            { id: 'all', label: 'All Featured', hindi: 'सभी ट्रेंडिंग' },
+            { id: 'wedding', label: 'Royal Vivah', hindi: 'विवाह' },
+            { id: 'birthday', label: 'Birthdays', hindi: 'जन्मदिन' },
+            { id: 'video', label: 'Video Reels', hindi: 'वीडियो रील' },
+            { id: 'other', label: 'Puja & Housewarming', hindi: 'गृह प्रवेश व पूजा' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveFilter(tab.id as typeof activeFilter)}
+              className={`px-4 py-2 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                activeFilter === tab.id
+                  ? 'bg-royal-800 text-white shadow-sm font-semibold'
+                  : 'bg-white text-stone-700 hover:bg-ivory-200 border border-gold-200'
+              }`}
+            >
+              {tab.label} <span className="font-hindi opacity-90">({tab.hindi})</span>
+            </button>
+          ))}
+        </div>
+
         {/* Templates Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {featured.map((template, idx) => (
-            <TemplateCard key={template.id} template={template} priority={idx < 3} />
+          {filteredTemplates.map((template, idx) => (
+            <TemplateCard
+              key={template.id}
+              template={template}
+              priority={idx < 3}
+              onPreview={handleOpenPreview}
+            />
           ))}
         </div>
 
@@ -54,11 +97,18 @@ export function FeaturedInvitations() {
             </p>
           </div>
 
-          <Button href="/card-editor" variant="gold" size="lg" className="whitespace-nowrap">
+          <Button href="/card-editor" variant="gold" size="lg" className="whitespace-nowrap shadow-gold-glow">
             <Sparkles className="w-4 h-4 mr-2" />
             Open Free Blank Editor
           </Button>
         </div>
+
+        {/* Preview Modal */}
+        <TemplatePreviewModal
+          template={previewTemplate}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+        />
       </Container>
     </section>
   );

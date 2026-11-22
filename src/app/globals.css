@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #FFFDF9;
+  --foreground: #2A122E;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Indian ornamental pattern overlays */
+.bg-utsav-pattern {
+  background-color: #FAF6EE;
+  background-image: radial-gradient(#D4AF37 0.75px, transparent 0.75px), radial-gradient(#BE185D 0.75px, #FAF6EE 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+  background-opacity: 0.05;
+}
+
+.bg-mandala-radial {
+  background: radial-gradient(circle at 50% 30%, rgba(212, 175, 55, 0.12) 0%, rgba(190, 24, 93, 0.05) 45%, transparent 75%);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #A47D1C 0%, #D4AF37 40%, #F5D77F 60%, #B88924 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.royal-gradient-text {
+  background: linear-gradient(135deg, #4A0E4E 0%, #831843 50%, #BE185D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border-gradient {
+  border-image: linear-gradient(to right, #D4AF37, #F5D77F, #D4AF37) 1;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF6EE;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A47D1C;
+}

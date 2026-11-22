@@ -23,7 +23,13 @@ const TRADITIONAL_EVENTS = [
 ];
 
 export default function OtherEventsPage() {
-  const otherTemplates = SAMPLE_TEMPLATES.filter((t) => t.category === 'other');
+  const otherTemplates = SAMPLE_TEMPLATES.filter(
+    (t) =>
+      t.category === 'other' ||
+      t.category === 'baby-shower' ||
+      t.category === 'housewarming' ||
+      t.category === 'mundan'
+  );
 
   return (
     <div className="py-12 bg-ivory-50 min-h-screen">

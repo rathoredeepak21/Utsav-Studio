@@ -1,25 +1,27 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import Image from 'next/image';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Template } from '@/types/template';
+import { TemplateDefinition } from '@/types/template';
+import { TemplateRenderer } from './engine/TemplateRenderer';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { DecorativeMotif } from '@/components/common/DecorativeMotif';
 import {
   X,
   Sparkles,
-  ShieldCheck,
   Video,
   FileImage,
   Languages,
-  Maximize2,
   CheckCircle,
+  Heart,
+  Palette,
+  Maximize2,
 } from 'lucide-react';
+import { isFavorite, toggleFavorite } from '@/lib/utils/favorites';
 
 interface TemplatePreviewModalProps {
-  template: Template | null;
+  template: TemplateDefinition | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -29,6 +31,21 @@ export function TemplatePreviewModal({
   isOpen,
   onClose,
 }: TemplatePreviewModalProps) {
+  const [favorite, setFavorite] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (template) {
+      setFavorite(isFavorite(template.id));
+    }
+    const handleUpdate = () => {
+      if (template) {
+        setFavorite(isFavorite(template.id));
+      }
+    };
+    window.addEventListener('utsav_favorites_updated', handleUpdate);
+    return () => window.removeEventListener('utsav_favorites_updated', handleUpdate);
+  }, [template]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -47,10 +64,18 @@ export function TemplatePreviewModal({
 
   if (!isOpen || !template) return null;
 
+  const handleToggleFavorite = () => {
+    const updated = toggleFavorite(template.id);
+    setFavorite(updated);
+  };
+
   const editorUrl =
     template.type === 'video'
       ? `/video-editor?template=${template.id}`
       : `/card-editor?template=${template.id}`;
+
+  const displayName = template.name || template.title || 'Utsav Invitation';
+  const displayHindi = template.nameHindi || template.titleHindi;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -65,42 +90,22 @@ export function TemplatePreviewModal({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-white/90 hover:bg-white text-stone-700 hover:text-royal-950 shadow-md transition-colors"
+          className="absolute top-4 right-4 z-40 p-2 rounded-full bg-white/90 hover:bg-white text-stone-700 hover:text-royal-950 shadow-md transition-colors"
           aria-label="Close preview"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Left Visual Preview Container */}
-        <div className="md:w-1/2 bg-ivory-100 relative min-h-[360px] md:min-h-[540px] flex items-center justify-center p-4">
-          <div className="relative w-full max-w-[300px] aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl border-4 border-gold-400">
-            <Image
-              src={template.previewImage}
-              alt={template.title}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 400px"
-              priority
-            />
+        {/* Left Visual Preview Container: Real JSON-Driven Template Renderer */}
+        <div className="md:w-1/2 bg-stone-950 relative min-h-[380px] md:min-h-[560px] flex items-center justify-center p-4 sm:p-6">
+          <div className="relative w-full max-w-[300px] aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl border-2 border-gold-400/80 bg-stone-900">
+            <TemplateRenderer template={template} />
 
-            <div className="absolute inset-0 bg-gradient-to-t from-royal-950/80 via-transparent to-black/20" />
-
-            <div className="absolute top-3 left-3">
-              <Badge variant="gold" className="font-bold shadow-md bg-gold-400 text-royal-950">
+            {/* Top Badge */}
+            <div className="absolute top-3 left-3 z-30 pointer-events-none">
+              <Badge variant="gold" className="font-bold shadow-md bg-gold-400 text-royal-950 text-xs">
                 100% FREE
               </Badge>
-            </div>
-
-            <div className="absolute bottom-4 left-4 right-4 text-white text-center">
-              <p className="text-[11px] font-hindi text-gold-300">
-                {template.titleHindi || '|| श्री गणेशाय नमः ||'}
-              </p>
-              <p className="font-serif text-base font-bold drop-shadow">
-                {template.title}
-              </p>
-              <p className="text-[10px] text-stone-200 tracking-wider uppercase mt-0.5">
-                1080 × 1920 HD Ready
-              </p>
             </div>
           </div>
         </div>
@@ -108,49 +113,70 @@ export function TemplatePreviewModal({
         {/* Right Details & Action Panel */}
         <div className="md:w-1/2 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-ivory-50/50">
           <div>
-            {/* Badges */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="capitalize px-3 py-1 rounded-full text-xs font-semibold bg-magenta-50 text-magenta-800 border border-magenta-200">
-                {template.category}
-              </span>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-royal-50 text-royal-800 border border-royal-200 flex items-center gap-1">
-                {template.type === 'video' ? (
-                  <>
-                    <Video className="w-3.5 h-3.5 text-gold-600" />
-                    Video Reel
-                  </>
-                ) : (
-                  <>
-                    <FileImage className="w-3.5 h-3.5 text-gold-600" />
-                    Card Invitation
-                  </>
-                )}
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                No Watermark
-              </span>
+            {/* Top Badges & Favorite */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="capitalize px-3 py-1 rounded-full text-xs font-semibold bg-magenta-50 text-magenta-800 border border-magenta-200">
+                  {template.category}
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-royal-50 text-royal-800 border border-royal-200 flex items-center gap-1">
+                  {template.type === 'video' ? (
+                    <>
+                      <Video className="w-3.5 h-3.5 text-gold-600" />
+                      Video Reel
+                    </>
+                  ) : (
+                    <>
+                      <FileImage className="w-3.5 h-3.5 text-gold-600" />
+                      Card Invitation
+                    </>
+                  )}
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  No Watermark
+                </span>
+              </div>
+
+              {/* Heart Favorite Button */}
+              <button
+                onClick={handleToggleFavorite}
+                type="button"
+                className={`p-2 rounded-full border shadow-sm transition-all active:scale-90 ${
+                  favorite
+                    ? 'bg-rose-50 border-rose-300 text-rose-600'
+                    : 'bg-white border-stone-200 text-stone-400 hover:text-rose-500'
+                }`}
+                title={favorite ? 'Saved in favorites' : 'Add to favorites'}
+                aria-label="Toggle favorite"
+              >
+                <Heart className={`w-4 h-4 ${favorite ? 'fill-rose-600' : ''}`} />
+              </button>
             </div>
 
             {/* Title */}
             <h3 className="font-serif text-2xl sm:text-3xl font-bold text-royal-950">
-              {template.title}
+              {displayName}
             </h3>
-            {template.titleHindi && (
+            {displayHindi && (
               <p className="font-hindi text-magenta-700 text-lg font-medium mt-1">
-                {template.titleHindi}
+                {displayHindi}
               </p>
             )}
 
             <DecorativeMotif type="flourish" className="my-3 justify-start" />
 
-            <p className="text-stone-600 text-sm leading-relaxed mb-5">
+            <p className="text-stone-600 text-sm leading-relaxed mb-4">
               {template.description}
             </p>
 
             {/* Template Specs */}
-            <div className="space-y-3 bg-white p-4 rounded-2xl border border-gold-200/80 mb-6 text-xs">
+            <div className="space-y-2.5 bg-white p-4 rounded-2xl border border-gold-200/80 mb-5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-stone-500 font-medium">Format & Size:</span>
+                <span className="text-stone-500 font-medium">Theme Style:</span>
+                <span className="font-semibold text-royal-950">{template.theme}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500 font-medium">Canvas Resolution:</span>
                 <span className="font-semibold text-royal-950">
                   9:16 Vertical HD ({template.dimensions.width}×{template.dimensions.height}px)
                 </span>
@@ -175,10 +201,18 @@ export function TemplatePreviewModal({
                   ))}
                 </div>
               </div>
+              {template.type === 'video' && template.previewConfig.musicTrack && (
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500 font-medium">Music Track:</span>
+                  <span className="font-semibold text-royal-950 truncate max-w-[200px]">
+                    🎵 {template.previewConfig.musicTrack}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Tags */}
-            <div className="flex flex-wrap gap-1.5 mb-6">
+            <div className="flex flex-wrap gap-1.5 mb-5">
               {template.tags.map((tag) => (
                 <span
                   key={tag}
@@ -191,7 +225,7 @@ export function TemplatePreviewModal({
           </div>
 
           {/* Action Footer */}
-          <div className="space-y-3 pt-4 border-t border-gold-200">
+          <div className="space-y-3 pt-3 border-t border-gold-200">
             <Button
               href={editorUrl}
               variant="gold"

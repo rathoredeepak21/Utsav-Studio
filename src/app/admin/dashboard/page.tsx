@@ -158,9 +158,9 @@ export default function AdminDashboardPage() {
                 {SAMPLE_TEMPLATES.map((tmpl) => (
                   <tr key={tmpl.id} className="hover:bg-stone-50/80 transition-colors">
                     <td className="py-3.5 px-4">
-                      <div className="font-semibold text-stone-900">{tmpl.title}</div>
-                      {tmpl.titleHindi && (
-                        <div className="font-hindi text-[11px] text-stone-500">{tmpl.titleHindi}</div>
+                      <div className="font-semibold text-stone-900">{tmpl.name || tmpl.title}</div>
+                      {(tmpl.nameHindi || tmpl.titleHindi) && (
+                        <div className="font-hindi text-[11px] text-stone-500">{tmpl.nameHindi || tmpl.titleHindi}</div>
                       )}
                     </td>
                     <td className="py-3.5 px-4 capitalize text-stone-600">{tmpl.category}</td>
@@ -173,7 +173,7 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <Link
-                        href={`/card-editor?template=${tmpl.id}`}
+                        href={tmpl.type === 'video' ? `/video-editor?template=${tmpl.id}` : `/card-editor?template=${tmpl.id}`}
                         className="text-magenta-700 hover:text-royal-950 font-semibold mr-3"
                       >
                         Preview

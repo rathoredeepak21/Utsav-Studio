@@ -82,6 +82,7 @@ interface VideoEditorState {
   pause: () => void;
   togglePlay: () => void;
   seek: (time: number) => void;
+  stepTime: (time: number) => void;
   setZoom: (zoom: number | ((prev: number) => number)) => void;
 
   // Scene management
@@ -324,7 +325,6 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
     const total = get().getTotalDuration();
     const clampedTime = Math.max(0, Math.min(total, time));
 
-    // Also determine which scene is active at this timestamp
     let accum = 0;
     let targetSceneId = get().scenes[0]?.id || '';
     for (const s of get().scenes) {
@@ -339,7 +339,26 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
 
     if (get().isPlaying) {
       startAudioPlayback(get().audioTrack, clampedTime, total);
+    } else {
+      stopAudioPlayback();
     }
+  },
+
+  stepTime: (time) => {
+    const total = get().getTotalDuration();
+    const clampedTime = Math.max(0, Math.min(total, time));
+
+    let accum = 0;
+    let targetSceneId = get().scenes[0]?.id || '';
+    for (const s of get().scenes) {
+      if (clampedTime >= accum && clampedTime <= accum + s.duration) {
+        targetSceneId = s.id;
+        break;
+      }
+      accum += s.duration;
+    }
+
+    set({ currentTime: clampedTime, activeSceneId: targetSceneId });
   },
 
   setZoom: (zoom) => {
@@ -573,6 +592,7 @@ export const useVideoEditorStore = create<VideoEditorState>((set, get) => ({
   // Audio
   setAudioTrack: (track) => {
     get().recordHistory();
+    stopAudioPlayback();
     set({ audioTrack: track, saveStatus: 'unsaved' });
     if (get().isPlaying) {
       startAudioPlayback(track, get().currentTime, get().getTotalDuration());

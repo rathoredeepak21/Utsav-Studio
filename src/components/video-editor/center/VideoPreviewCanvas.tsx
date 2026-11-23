@@ -35,6 +35,7 @@ export function VideoPreviewCanvas() {
     pause,
     togglePlay,
     seek,
+    stepTime,
     getTotalDuration,
     getActiveScene,
     selectElement,
@@ -86,7 +87,7 @@ export function VideoPreviewCanvas() {
       if (nextTime >= totalDuration) {
         seek(0);
       } else {
-        seek(nextTime);
+        stepTime(nextTime);
       }
 
       animFrameIdRef.current = requestAnimationFrame(tick);

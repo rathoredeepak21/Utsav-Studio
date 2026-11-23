@@ -18,7 +18,9 @@ import {
   getAllUploadedImages,
   saveAudioTrack,
   getAllAudioTracks,
+  deleteAudioTrack,
 } from '@/lib/storage/db';
+import { decodeAudioBlob, cacheAudioBuffer, evictAudioBuffer } from '@/lib/video/audioEngine';
 import {
   Layers,
   LayoutGrid,
@@ -173,35 +175,92 @@ export function VideoEditorLeftSidebar() {
     reader.readAsDataURL(file);
   };
 
-  // Custom Audio Upload Handler
+  // Custom Audio Upload Handler with immediate decoding and buffer caching
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const audioTrackItem = {
-      id: `audio-user-${Date.now()}`,
-      name: file.name,
-      blob: file,
-      mimeType: file.type || 'audio/mp3',
-      duration: 30,
-      createdAt: Date.now(),
-    };
-    await saveAudioTrack(audioTrackItem);
-    setUserAudioList((prev) => [audioTrackItem, ...prev]);
+    // Reset input value so re-selecting the same file always triggers onChange
+    e.target.value = '';
 
-    const blobUrl = URL.createObjectURL(file);
+    try {
+      const decoded = await decodeAudioBlob(file);
+      const trackId = `audio-user-${Date.now()}`;
+
+      const audioTrackItem = {
+        id: trackId,
+        name: file.name,
+        blob: file,
+        mimeType: file.type || 'audio/mp3',
+        duration: decoded.duration,
+        createdAt: Date.now(),
+      };
+
+      await saveAudioTrack(audioTrackItem);
+      cacheAudioBuffer(trackId, decoded);
+      setUserAudioList((prev) => [audioTrackItem, ...prev]);
+
+      const blobUrl = URL.createObjectURL(file);
+      setAudioTrack({
+        id: trackId,
+        title: file.name,
+        src: blobUrl,
+        blobId: trackId,
+        duration: decoded.duration,
+        isSynth: false,
+        volume: 0.85,
+        startTime: 0,
+        trimStart: 0,
+        trimEnd: decoded.duration,
+        fadeInDuration: 1.0,
+        fadeOutDuration: 1.5,
+        isMuted: false,
+      });
+    } catch (err) {
+      console.error('Audio decode error:', err);
+      alert('Could not decode this audio file. Please upload a standard MP3, WAV, or AAC audio file.');
+    }
+  };
+
+  const handleSelectUploadedTrack = (track: any) => {
+    const blobUrl = URL.createObjectURL(track.blob);
     setAudioTrack({
-      id: audioTrackItem.id,
-      title: file.name,
+      id: track.id,
+      title: track.name,
       src: blobUrl,
+      blobId: track.id,
+      duration: track.duration,
       isSynth: false,
       volume: 0.85,
       startTime: 0,
       trimStart: 0,
+      trimEnd: track.duration,
       fadeInDuration: 1.0,
       fadeOutDuration: 1.5,
       isMuted: false,
     });
+  };
+
+  const handleDeleteUploadedTrack = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteAudioTrack(id);
+    evictAudioBuffer(id);
+    setUserAudioList((prev) => prev.filter((t) => t.id !== id));
+    if (audioTrack?.id === id) {
+      setAudioTrack({
+        id: 'synth-shehnai_sitar',
+        title: 'Mangal Shehnai & Sitar Harmony',
+        src: 'synth',
+        isSynth: true,
+        synthPreset: 'shehnai_sitar',
+        volume: 0.85,
+        startTime: 0,
+        trimStart: 0,
+        fadeInDuration: 1.0,
+        fadeOutDuration: 1.5,
+        isMuted: false,
+      });
+    }
   };
 
   // Add Motif
@@ -637,7 +696,7 @@ export function VideoEditorLeftSidebar() {
             {/* Custom Upload */}
             <label className="flex items-center justify-center space-x-2 border border-dashed border-stone-700 hover:border-gold-400 rounded-xl p-3 cursor-pointer bg-stone-900/50 hover:bg-stone-900 transition-all text-center">
               <Upload className="w-4 h-4 text-gold-400" />
-              <span className="font-semibold text-xs text-white">Upload Audio (.mp3, .wav)</span>
+              <span className="font-semibold text-xs text-white">Upload Audio (.mp3, .wav, .m4a)</span>
               <input
                 type="file"
                 accept="audio/*"
@@ -645,6 +704,51 @@ export function VideoEditorLeftSidebar() {
                 className="hidden"
               />
             </label>
+
+            {/* User Uploaded Tracks List */}
+            {userAudioList.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-gold-400 block">
+                  Your Uploaded Songs ({userAudioList.length})
+                </span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {userAudioList.map((t) => {
+                    const isSelected = audioTrack?.id === t.id && !audioTrack?.isSynth;
+                    const mins = Math.floor((t.duration || 0) / 60);
+                    const secs = Math.floor((t.duration || 0) % 60).toString().padStart(2, '0');
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => handleSelectUploadedTrack(t)}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'border-gold-400 bg-royal-950/70 shadow-gold-glow/20 ring-1 ring-gold-400/50'
+                            : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="font-semibold text-white text-xs truncate">{t.name}</p>
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {mins}:{secs} • Uploaded Song
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {isSelected && <Check className="w-4 h-4 text-gold-400 mr-1" />}
+                          <button
+                            onClick={(e) => handleDeleteUploadedTrack(t.id, e)}
+                            className="p-1 rounded text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition-colors"
+                            title="Delete uploaded track"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Stock Synth Ceremonial Presets */}
             <div className="space-y-2 pt-1">

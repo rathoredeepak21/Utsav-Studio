@@ -17,29 +17,74 @@ export interface CancelToken {
 export interface ExportCapabilities {
   supportsWebCodecs: boolean;
   supportsAudioEncoder: boolean;
+  supportsAac: boolean;
   supportsMp4: boolean;
   recommendedFormat: 'mp4' | 'webm';
 }
 
 /**
- * Detect browser video export capabilities
+ * Detect browser video export capabilities (WebCodecs AVC + AAC support)
  */
-export function checkExportCapabilities(): ExportCapabilities {
+export async function checkExportCapabilitiesAsync(): Promise<ExportCapabilities> {
   if (typeof window === 'undefined') {
     return {
       supportsWebCodecs: false,
       supportsAudioEncoder: false,
+      supportsAac: false,
       supportsMp4: false,
       recommendedFormat: 'webm',
     };
   }
 
-  const supportsWebCodecs = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
-  const supportsAudioEncoder = typeof window.AudioEncoder !== 'undefined' && typeof window.AudioData !== 'undefined';
+  const supportsWebCodecs =
+    typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
+  const supportsAudioEncoder =
+    typeof window.AudioEncoder !== 'undefined' && typeof window.AudioData !== 'undefined';
+
+  let supportsAac = false;
+  if (supportsAudioEncoder) {
+    try {
+      const res = await AudioEncoder.isConfigSupported({
+        codec: 'mp4a.40.2',
+        sampleRate: 44100,
+        numberOfChannels: 2,
+        bitrate: 192000,
+      });
+      supportsAac = Boolean(res.supported);
+    } catch {
+      supportsAac = false;
+    }
+  }
 
   return {
     supportsWebCodecs,
     supportsAudioEncoder,
+    supportsAac,
+    supportsMp4: supportsWebCodecs,
+    recommendedFormat: supportsWebCodecs ? 'mp4' : 'webm',
+  };
+}
+
+export function checkExportCapabilities(): ExportCapabilities {
+  if (typeof window === 'undefined') {
+    return {
+      supportsWebCodecs: false,
+      supportsAudioEncoder: false,
+      supportsAac: false,
+      supportsMp4: false,
+      recommendedFormat: 'webm',
+    };
+  }
+
+  const supportsWebCodecs =
+    typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
+  const supportsAudioEncoder =
+    typeof window.AudioEncoder !== 'undefined' && typeof window.AudioData !== 'undefined';
+
+  return {
+    supportsWebCodecs,
+    supportsAudioEncoder,
+    supportsAac: supportsAudioEncoder,
     supportsMp4: supportsWebCodecs,
     recommendedFormat: supportsWebCodecs ? 'mp4' : 'webm',
   };
@@ -52,7 +97,7 @@ export function getExportDimensions(
   aspectRatio: '9:16' | '16:9' | '1:1',
   resolution: '1080p' | '720p' | '480p'
 ): { width: number; height: number } {
-  // Ensure dimensions are even numbers (H.264 requirement: divisible by 2)
+  // H.264 requires dimensions divisible by 2
   if (aspectRatio === '9:16') {
     if (resolution === '1080p') return { width: 1080, height: 1920 };
     if (resolution === '720p') return { width: 720, height: 1280 };
@@ -70,7 +115,8 @@ export function getExportDimensions(
 }
 
 /**
- * WebCodecs + mp4-muxer deterministic frame-by-frame export pipeline
+ * WebCodecs VideoEncoder + AudioEncoder + mp4-muxer deterministic export pipeline.
+ * Encodes video frame-by-frame and muxes AAC audio chunks into a valid MP4 container.
  */
 async function exportWithWebCodecs(
   project: VideoProject,
@@ -81,7 +127,6 @@ async function exportWithWebCodecs(
   const { width, height } = getExportDimensions(project.aspectRatio, options.resolution);
   const fps = options.fps || 30;
 
-  // Calculate total duration from scenes
   const totalDuration = project.scenes.reduce((sum, s) => sum + s.duration, 0);
   const totalFrames = Math.max(1, Math.round(totalDuration * fps));
 
@@ -89,10 +134,10 @@ async function exportWithWebCodecs(
     percent: 1,
     currentFrame: 0,
     totalFrames,
-    statusText: 'Preparing fonts, ceremonial motifs & assets...',
+    statusText: 'Preparing fonts, ceremonial motifs & audio buffer...',
   });
 
-  // Ensure fonts and images are preloaded
+  // Ensure fonts and images are ready
   if (typeof document !== 'undefined' && document.fonts) {
     await document.fonts.ready;
   }
@@ -100,18 +145,46 @@ async function exportWithWebCodecs(
 
   if (cancelToken.isCancelled) throw new Error('Export cancelled');
 
-  // Prepare audio if configured and AudioEncoder is supported
-  const caps = checkExportCapabilities();
+  // Load and decode audio buffer if an audio track is configured
   let audioBuffer: AudioBuffer | null = null;
-  const includeAudio = Boolean(project.audio && !project.audio.isMuted && caps.supportsAudioEncoder);
+  const hasAudioTrack = Boolean(project.audio && !project.audio.isMuted && project.audio.volume > 0);
 
-  if (project.audio && !project.audio.isMuted) {
+  if (hasAudioTrack && project.audio) {
     try {
       audioBuffer = await getAudioTrackBuffer(project.audio, totalDuration);
     } catch (e) {
-      console.warn('Could not decode audio track for export, continuing with video only:', e);
+      console.error('Failed to decode audio track for export:', e);
+      throw new Error('Could not decode audio track for export.');
     }
   }
+
+  // Check if browser WebCodecs can encode AAC
+  const sampleRate = audioBuffer ? audioBuffer.sampleRate : 44100;
+  const numChannels = audioBuffer ? Math.min(2, audioBuffer.numberOfChannels) : 2;
+
+  let canEncodeAac = false;
+  if (hasAudioTrack && audioBuffer && typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined') {
+    try {
+      const aacSupport = await AudioEncoder.isConfigSupported({
+        codec: 'mp4a.40.2',
+        sampleRate,
+        numberOfChannels: numChannels,
+        bitrate: 192000,
+      });
+      canEncodeAac = Boolean(aacSupport.supported);
+    } catch {
+      canEncodeAac = false;
+    }
+  }
+
+  // If user requested audio but WebCodecs AAC is unsupported on this browser,
+  // transparently switch to MediaRecorder which handles audio recording natively!
+  if (hasAudioTrack && audioBuffer && !canEncodeAac) {
+    console.info('WebCodecs AAC not supported on this browser; delegating to MediaRecorder audio mixer pipeline.');
+    return exportWithMediaRecorder(project, options, onProgress, cancelToken);
+  }
+
+  const willMuxAudio = Boolean(hasAudioTrack && audioBuffer && canEncodeAac);
 
   // Setup MP4 Muxer
   const muxer = new Muxer({
@@ -121,11 +194,13 @@ async function exportWithWebCodecs(
       width,
       height,
     },
-    audio: includeAudio && audioBuffer ? {
-      codec: 'aac',
-      sampleRate: audioBuffer.sampleRate,
-      numberOfChannels: Math.min(2, audioBuffer.numberOfChannels),
-    } : undefined,
+    audio: willMuxAudio
+      ? {
+          codec: 'aac',
+          sampleRate,
+          numberOfChannels: numChannels,
+        }
+      : undefined,
     fastStart: 'in-memory',
   });
 
@@ -139,15 +214,14 @@ async function exportWithWebCodecs(
     },
   });
 
-  // Bitrates based on quality
-  let bitrate = 6_000_000; // 6 Mbps
+  let bitrate = 6_000_000;
   if (options.quality === 'medium') bitrate = 3_500_000;
   else if (options.quality === 'fast') bitrate = 2_000_000;
   if (options.resolution === '720p') bitrate = Math.round(bitrate * 0.6);
   else if (options.resolution === '480p') bitrate = Math.round(bitrate * 0.35);
 
   videoEncoder.configure({
-    codec: 'avc1.4d002a', // Main Profile Level 4.2
+    codec: 'avc1.4d002a',
     width,
     height,
     bitrate,
@@ -160,7 +234,7 @@ async function exportWithWebCodecs(
   renderCanvas.height = height;
   const renderCtx = renderCanvas.getContext('2d', { alpha: false, desynchronized: true })!;
 
-  // Frame-by-Frame encoding loop
+  // 1. Video frame-by-frame encoding loop
   for (let frame = 0; frame < totalFrames; frame++) {
     if (cancelToken.isCancelled) {
       videoEncoder.close();
@@ -173,10 +247,8 @@ async function exportWithWebCodecs(
 
     const frameTime = frame / fps;
 
-    // Render exact frame deterministically
     renderVideoFrame(renderCtx, project, frameTime, { width, height });
 
-    // Create VideoFrame with microsecond timestamp
     const timestampMicros = Math.round(frameTime * 1_000_000);
     const videoFrame = new VideoFrame(renderCanvas, {
       timestamp: timestampMicros,
@@ -187,76 +259,92 @@ async function exportWithWebCodecs(
     videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
     videoFrame.close();
 
-    // Prevent main thread congestion
     if (frame % 6 === 0) {
-      const progressPercent = Math.min(95, Math.round((frame / totalFrames) * 92) + 2);
+      const progressPercent = Math.min(90, Math.round((frame / totalFrames) * 88) + 2);
       onProgress({
         percent: progressPercent,
         currentFrame: frame + 1,
         totalFrames,
-        statusText: `Encoding frame ${frame + 1} of ${totalFrames} (${progressPercent}%)...`,
+        statusText: `Encoding video frame ${frame + 1} of ${totalFrames} (${progressPercent}%)...`,
       });
       await new Promise((r) => setTimeout(r, 0));
     }
   }
 
-  // Audio Encoding if supported
-  if (includeAudio && audioBuffer) {
+  // 2. Audio Encoding and Muxing (AAC)
+  if (willMuxAudio && audioBuffer && project.audio) {
     onProgress({
-      percent: 94,
+      percent: 92,
       currentFrame: totalFrames,
       totalFrames,
-      statusText: 'Encoding ceremonial audio track...',
+      statusText: 'Encoding selected audio track & volume envelope...',
     });
 
-    try {
-      const audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-        error: (e) => console.error('AudioEncoder error:', e),
-      });
+    const audioEncoder = new AudioEncoder({
+      output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+      error: (e) => console.error('AudioEncoder error:', e),
+    });
 
-      audioEncoder.configure({
-        codec: 'mp4a.40.2', // AAC-LC
-        sampleRate: audioBuffer.sampleRate,
-        numberOfChannels: Math.min(2, audioBuffer.numberOfChannels),
-        bitrate: 192_000,
-      });
+    audioEncoder.configure({
+      codec: 'mp4a.40.2',
+      sampleRate,
+      numberOfChannels: numChannels,
+      bitrate: 192000,
+    });
 
-      const sampleRate = audioBuffer.sampleRate;
-      const totalAudioFrames = Math.min(
-        audioBuffer.length,
-        Math.floor(totalDuration * sampleRate)
-      );
-      const CHUNK_SIZE = 1024;
+    const totalAudioFrames = Math.min(
+      audioBuffer.length,
+      Math.floor(totalDuration * sampleRate)
+    );
+    const CHUNK_SIZE = 1024;
+    const vol = Math.max(0, Math.min(1, project.audio.volume ?? 0.85));
 
-      for (let offset = 0; offset < totalAudioFrames; offset += CHUNK_SIZE) {
-        if (cancelToken.isCancelled) break;
-        const currentChunkSize = Math.min(CHUNK_SIZE, totalAudioFrames - offset);
-        const audioData = new AudioData({
-          format: 'f32-planar',
-          sampleRate,
-          numberOfFrames: currentChunkSize,
-          numberOfChannels: Math.min(2, audioBuffer.numberOfChannels),
-          timestamp: Math.round((offset / sampleRate) * 1_000_000),
-          data: audioBuffer.getChannelData(0).subarray(offset, offset + currentChunkSize),
-        });
+    const ch0 = audioBuffer.getChannelData(0);
+    const ch1 = numChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
 
-        audioEncoder.encode(audioData);
-        audioData.close();
+    for (let offset = 0; offset < totalAudioFrames; offset += CHUNK_SIZE) {
+      if (cancelToken.isCancelled) break;
+      const currentChunkSize = Math.min(CHUNK_SIZE, totalAudioFrames - offset);
+
+      // Pack planar float32 buffer: channel 0 contiguous, followed by channel 1 contiguous
+      const planarData = new Float32Array(currentChunkSize * numChannels);
+
+      // Channel 0
+      const ch0Slice = ch0.subarray(offset, offset + currentChunkSize);
+      for (let i = 0; i < currentChunkSize; i++) {
+        planarData[i] = ch0Slice[i] * vol;
       }
 
-      await audioEncoder.flush();
-      audioEncoder.close();
-    } catch (audioErr) {
-      console.warn('Audio encoding skipped due to browser limitations:', audioErr);
+      // Channel 1
+      if (numChannels > 1) {
+        const ch1Slice = ch1.subarray(offset, offset + currentChunkSize);
+        for (let i = 0; i < currentChunkSize; i++) {
+          planarData[currentChunkSize + i] = ch1Slice[i] * vol;
+        }
+      }
+
+      const audioData = new AudioData({
+        format: 'f32-planar',
+        sampleRate,
+        numberOfFrames: currentChunkSize,
+        numberOfChannels: numChannels,
+        timestamp: Math.round((offset / sampleRate) * 1_000_000),
+        data: planarData,
+      });
+
+      audioEncoder.encode(audioData);
+      audioData.close();
     }
+
+    await audioEncoder.flush();
+    audioEncoder.close();
   }
 
   onProgress({
     percent: 97,
     currentFrame: totalFrames,
     totalFrames,
-    statusText: 'Muxing MP4 container & finalizing video...',
+    statusText: 'Muxing MP4 container & writing audio/video streams...',
   });
 
   await videoEncoder.flush();
@@ -270,14 +358,15 @@ async function exportWithWebCodecs(
     percent: 100,
     currentFrame: totalFrames,
     totalFrames,
-    statusText: 'Video export completed successfully!',
+    statusText: 'Video export with audio completed successfully!',
   });
 
   return blob;
 }
 
 /**
- * MediaRecorder fallback export pipeline (produces WebM or supported MP4)
+ * MediaRecorder fallback export pipeline.
+ * Perfectly combines the Canvas video stream AND the Web Audio Destination node into a single recorded stream with sound.
  */
 async function exportWithMediaRecorder(
   project: VideoProject,
@@ -293,21 +382,64 @@ async function exportWithMediaRecorder(
     percent: 2,
     currentFrame: 0,
     totalFrames: 100,
-    statusText: 'Initializing MediaRecorder fallback stream...',
+    statusText: 'Initializing MediaRecorder audio/video stream...',
   });
 
-  // Ensure fonts and images are ready
   if (typeof document !== 'undefined' && document.fonts) {
     await document.fonts.ready;
   }
   await preloadProjectImages(project);
 
+  // 1. Prepare Audio
+  let audioBuffer: AudioBuffer | null = null;
+  const hasAudioTrack = Boolean(project.audio && !project.audio.isMuted && project.audio.volume > 0);
+
+  if (hasAudioTrack && project.audio) {
+    try {
+      audioBuffer = await getAudioTrackBuffer(project.audio, totalDuration);
+    } catch (e) {
+      console.warn('Audio decoding error in MediaRecorder export:', e);
+    }
+  }
+
+  // 2. Prepare Canvas
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: false })!;
 
-  const stream = canvas.captureStream(fps);
+  const canvasStream = canvas.captureStream(fps);
+
+  // 3. Setup Web Audio Destination node to mix the audio track into the recording stream
+  let audioCtx: AudioContext | null = null;
+  let audioSource: AudioBufferSourceNode | null = null;
+  let combinedStream: MediaStream;
+
+  if (audioBuffer && project.audio) {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    audioCtx = new AudioCtx();
+    const destNode = audioCtx.createMediaStreamDestination();
+
+    audioSource = audioCtx.createBufferSource();
+    audioSource.buffer = audioBuffer;
+
+    const gainNode = audioCtx.createGain();
+    const vol = Math.max(0, Math.min(1, project.audio.volume ?? 0.85));
+    gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+
+    audioSource.connect(gainNode);
+    gainNode.connect(destNode);
+
+    // Combine Video Track and Audio Track into one stream!
+    combinedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...destNode.stream.getAudioTracks(),
+    ]);
+  } else {
+    combinedStream = canvasStream;
+  }
 
   // Determine supported mime type
   const mimeTypes = [
@@ -318,9 +450,9 @@ async function exportWithMediaRecorder(
   ];
   const selectedMime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || 'video/webm';
 
-  const mediaRecorder = new MediaRecorder(stream, {
+  const mediaRecorder = new MediaRecorder(combinedStream, {
     mimeType: selectedMime,
-    videoBitsPerSecond: 4_000_000,
+    videoBitsPerSecond: 4_500_000,
   });
 
   const chunks: Blob[] = [];
@@ -338,6 +470,11 @@ async function exportWithMediaRecorder(
 
   mediaRecorder.start(250);
 
+  // Start audio playback in sync with recording
+  if (audioSource) {
+    audioSource.start(0, project.audio?.trimStart || 0);
+  }
+
   const startTime = performance.now();
   const totalMs = totalDuration * 1000;
 
@@ -345,6 +482,9 @@ async function exportWithMediaRecorder(
     function tick() {
       if (cancelToken.isCancelled) {
         mediaRecorder.stop();
+        if (audioSource) {
+          try { audioSource.stop(); } catch {}
+        }
         reject(new Error('Export cancelled'));
         return;
       }
@@ -359,13 +499,16 @@ async function exportWithMediaRecorder(
         percent: progressPercent,
         currentFrame: Math.round(progressSec * fps),
         totalFrames: Math.round(totalDuration * fps),
-        statusText: `Recording video (${progressPercent}%)...`,
+        statusText: `Recording video & audio stream (${progressPercent}%)...`,
       });
 
       if (elapsedMs < totalMs) {
         requestAnimationFrame(tick);
       } else {
         mediaRecorder.stop();
+        if (audioSource) {
+          try { audioSource.stop(); } catch {}
+        }
         resolve();
       }
     }
@@ -374,18 +517,24 @@ async function exportWithMediaRecorder(
 
   const blob = await recordedPromise;
 
+  // Cleanup Web Audio and MediaStream tracks
+  if (audioCtx) {
+    try { audioCtx.close(); } catch {}
+  }
+  combinedStream.getTracks().forEach((track) => track.stop());
+
   onProgress({
     percent: 100,
     currentFrame: Math.round(totalDuration * fps),
     totalFrames: Math.round(totalDuration * fps),
-    statusText: 'Video export completed successfully!',
+    statusText: 'Video export with audio completed successfully!',
   });
 
   return blob;
 }
 
 /**
- * Main export coordinator: Automatically selects optimal engine
+ * Main export coordinator: Automatically selects optimal engine and guarantees audio inclusion
  */
 export async function exportVideoProject(
   project: VideoProject,
@@ -393,13 +542,13 @@ export async function exportVideoProject(
   onProgress: (p: ExportProgress) => void,
   cancelToken: CancelToken
 ): Promise<{ blob: Blob; filename: string; format: 'mp4' | 'webm' }> {
-  const caps = checkExportCapabilities();
+  const caps = await checkExportCapabilitiesAsync();
   const safeTitle = (project.title || 'utsav-invitation-video')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '-')
     .replace(/-+/g, '-');
 
-  // If WebCodecs is supported and user opted for MP4 (or default)
+  // If WebCodecs AVC and AAC are supported and user requested MP4 (or default)
   if (caps.supportsWebCodecs && options.format !== 'webm') {
     const blob = await exportWithWebCodecs(project, options, onProgress, cancelToken);
     return {
@@ -409,7 +558,7 @@ export async function exportVideoProject(
     };
   }
 
-  // Fallback to MediaRecorder
+  // Fallback to MediaRecorder (mixed audio + video)
   const blob = await exportWithMediaRecorder(project, options, onProgress, cancelToken);
   const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
   return {

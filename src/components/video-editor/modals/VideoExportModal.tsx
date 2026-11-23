@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useVideoEditorStore } from '@/lib/store/useVideoEditorStore';
 import {
   exportVideoProject,
+  checkExportCapabilitiesAsync,
   checkExportCapabilities,
   ExportCapabilities,
   ExportProgress,
@@ -20,6 +21,7 @@ import {
   ShieldCheck,
   Loader2,
   Film,
+  Music,
 } from 'lucide-react';
 
 export function VideoExportModal() {
@@ -56,9 +58,10 @@ export function VideoExportModal() {
 
   useEffect(() => {
     if (isExportModalOpen) {
-      const caps = checkExportCapabilities();
-      setCapabilities(caps);
-      setFormat(caps.recommendedFormat);
+      checkExportCapabilitiesAsync().then((caps) => {
+        setCapabilities(caps);
+        setFormat(caps.recommendedFormat);
+      });
       setExportedResult(null);
       setErrorMessage(null);
       setProgress(null);
@@ -246,6 +249,25 @@ export function VideoExportModal() {
                     </span>
                   </button>
                 </div>
+              </div>
+
+              {/* Audio Track Status Indicator */}
+              <div className="bg-royal-950/40 border border-gold-500/30 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2 truncate mr-2">
+                  <Music className="w-4 h-4 text-gold-400 shrink-0" />
+                  <span className="text-stone-300 truncate">
+                    Music: <strong className="text-gold-300">{audioTrack && !audioTrack.isMuted ? audioTrack.title : 'Muted / No Audio'}</strong>
+                  </span>
+                </div>
+                {audioTrack && !audioTrack.isMuted ? (
+                  <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40 shrink-0">
+                    Audio Included ({Math.round((audioTrack.volume ?? 0.85) * 100)}%)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-stone-400 font-mono bg-stone-900 px-2 py-0.5 rounded shrink-0">
+                    Silent Video
+                  </span>
+                )}
               </div>
 
               {/* Free Promise badge */}

@@ -122,6 +122,8 @@ export interface AudioTrackConfig {
   id: string;
   title: string;
   src: string; // Blob URL, Asset URL, or Synth preset
+  blobId?: string; // Reference to IndexedDB stored audio track
+  duration?: number; // Total duration in seconds
   isSynth?: boolean;
   synthPreset?: 'shehnai_sitar' | 'royal_dhol' | 'sacred_flute' | 'celebration' | 'acoustic_strings';
   volume: number; // 0 to 1

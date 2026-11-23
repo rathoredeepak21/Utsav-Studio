@@ -9,8 +9,29 @@ import {
   AudioTrackConfig,
 } from '@/types/videoEditor';
 import { getMotifDataUri } from '../editor/motifSvgHelper';
+import { getVideoTemplateById } from '@/data/videoTemplates';
 
 export function convertTemplateToVideoProject(template: TemplateDefinition): VideoProject {
+  // Check if native video template exists by ID or direct videoScenes property
+  const nativeVideoTemplate = template.videoScenes?.length
+    ? template
+    : getVideoTemplateById(template.id);
+
+  if (nativeVideoTemplate && nativeVideoTemplate.videoScenes && nativeVideoTemplate.videoScenes.length > 0) {
+    return {
+      id: `vproj-${Date.now()}`,
+      title: nativeVideoTemplate.name || nativeVideoTemplate.title || 'My Video Invitation',
+      templateId: nativeVideoTemplate.id,
+      category: nativeVideoTemplate.category,
+      aspectRatio: nativeVideoTemplate.aspectRatio || '9:16',
+      dimensions: nativeVideoTemplate.dimensions || { width: 1080, height: 1920 },
+      fps: 30,
+      scenes: JSON.parse(JSON.stringify(nativeVideoTemplate.videoScenes)),
+      audio: nativeVideoTemplate.audioConfig ? { ...nativeVideoTemplate.audioConfig } : null,
+      lastModified: Date.now(),
+      createdAt: Date.now(),
+    };
+  }
   const width = template.dimensions?.width || 1080;
   const height = template.dimensions?.height || 1920;
   const isHi = template.defaultLanguage === 'hi';

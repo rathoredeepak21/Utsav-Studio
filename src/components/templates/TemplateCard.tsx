@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { TemplateDefinition } from '@/types/template';
 import { TemplateRenderer } from './engine/TemplateRenderer';
+import { VideoCardMotionPreview } from './VideoCardMotionPreview';
 import { Badge } from '@/components/common/Badge';
 import { Sparkles, Video, FileImage, ArrowRight, Eye, Heart } from 'lucide-react';
 import { isFavorite, toggleFavorite } from '@/lib/utils/favorites';
@@ -16,6 +17,7 @@ interface TemplateCardProps {
 
 export function TemplateCard({ template, onPreview }: TemplateCardProps) {
   const [favorite, setFavorite] = useState<boolean>(false);
+  const [isCardHovered, setIsCardHovered] = useState<boolean>(false);
 
   useEffect(() => {
     setFavorite(isFavorite(template.id));
@@ -44,15 +46,23 @@ export function TemplateCard({ template, onPreview }: TemplateCardProps) {
   const displayHindi = template.nameHindi || template.titleHindi;
 
   return (
-    <div className="group relative bg-white rounded-3xl overflow-hidden border border-gold-200/70 shadow-card-warm hover:shadow-gold-glow/50 transition-all duration-300 flex flex-col hover:-translate-y-1">
+    <div 
+      onMouseEnter={() => setIsCardHovered(true)}
+      onMouseLeave={() => setIsCardHovered(false)}
+      className="group relative bg-white rounded-3xl overflow-hidden border border-gold-200/70 shadow-card-warm hover:shadow-gold-glow/50 transition-all duration-300 flex flex-col hover:-translate-y-1"
+    >
       {/* Visual Live Template Preview Container */}
       <div 
         onClick={() => onPreview?.(template)}
         className="relative aspect-[9/16] w-full overflow-hidden bg-stone-900 cursor-pointer select-none"
       >
-        {/* Real JSON-Driven Template Renderer */}
-        <div className="absolute inset-0 w-full h-full pointer-events-none group-hover:scale-[1.02] transition-transform duration-500 ease-out">
-          <TemplateRenderer template={template} />
+        {/* Dynamic Renderer: Video Motion Canvas for Videos, Card Renderer for Cards */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none group-hover:scale-[1.01] transition-transform duration-500 ease-out">
+          {template.type === 'video' ? (
+            <VideoCardMotionPreview template={template} isHovered={isCardHovered} />
+          ) : (
+            <TemplateRenderer template={template} />
+          )}
         </div>
 
         {/* Top Floating Badges */}
@@ -98,8 +108,17 @@ export function TemplateCard({ template, onPreview }: TemplateCardProps) {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[200px] py-2.5 px-4 rounded-full bg-gold-400 text-royal-950 font-bold text-xs sm:text-sm shadow-xl hover:bg-gold-300 transform scale-95 group-hover:scale-100 transition-all flex items-center justify-center gap-1.5 text-center"
           >
-            <Sparkles className="w-4 h-4 text-royal-950" />
-            Customize Design
+            {template.type === 'video' ? (
+              <>
+                <Video className="w-4 h-4 text-royal-950" />
+                Customize Video
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-royal-950" />
+                Customize Card
+              </>
+            )}
           </Link>
 
           {onPreview && (

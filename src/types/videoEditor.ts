@@ -64,6 +64,12 @@ export interface VideoElementBase {
   animation: ElementAnimationConfig;
 }
 
+export type TextMotionPreset =
+  | 'none'
+  | 'golden_shimmer'
+  | 'cinematic_reveal'
+  | 'royal_glow';
+
 export interface TextVideoElement extends VideoElementBase {
   type: 'text';
   text: string;
@@ -75,6 +81,7 @@ export interface TextVideoElement extends VideoElementBase {
   lineHeight?: number;
   letterSpacing?: number;
   textShadow?: string;
+  motionPreset?: TextMotionPreset;
 }
 
 export interface ImageVideoElement extends VideoElementBase {
@@ -109,6 +116,27 @@ export type VideoElement =
   | StickerVideoElement
   | ShapeVideoElement;
 
+export type ParticleEffectType =
+  | 'none'
+  | 'golden_dust'
+  | 'falling_rose_petals'
+  | 'falling_marigold_petals'
+  | 'sparkles_bokeh'
+  | 'floating_balloons'
+  | 'glowing_diyas'
+  | 'rotating_mandala'
+  | 'party_confetti'
+  | 'floating_hearts'
+  | 'fireflies';
+
+export interface ParticleConfig {
+  type: ParticleEffectType;
+  intensity?: 'subtle' | 'medium' | 'rich';
+  speed?: number;
+  color?: string;
+  secondaryColor?: string;
+}
+
 export interface VideoScene {
   id: string;
   name: string;
@@ -116,6 +144,7 @@ export interface VideoScene {
   background: CanvasBackground;
   transition: SceneTransitionConfig;
   elements: VideoElement[];
+  particles?: ParticleConfig;
 }
 
 export interface AudioTrackConfig {

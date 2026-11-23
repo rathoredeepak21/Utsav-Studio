@@ -7,6 +7,7 @@ import { BABY_SHOWER_TEMPLATES } from './babyshowers';
 import { HOUSEWARMING_TEMPLATES } from './housewarmings';
 import { MUNDAN_TEMPLATES } from './mundans';
 import { OTHER_TEMPLATES } from './others';
+import { ALL_VIDEO_TEMPLATES } from '../videoTemplates';
 
 export {
   WEDDING_TEMPLATES,
@@ -17,9 +18,10 @@ export {
   HOUSEWARMING_TEMPLATES,
   MUNDAN_TEMPLATES,
   OTHER_TEMPLATES,
+  ALL_VIDEO_TEMPLATES,
 };
 
-export const ALL_TEMPLATES: TemplateDefinition[] = [
+export const ALL_CARD_TEMPLATES: TemplateDefinition[] = [
   ...WEDDING_TEMPLATES,
   ...BIRTHDAY_TEMPLATES,
   ...ENGAGEMENT_TEMPLATES,
@@ -28,4 +30,9 @@ export const ALL_TEMPLATES: TemplateDefinition[] = [
   ...HOUSEWARMING_TEMPLATES,
   ...MUNDAN_TEMPLATES,
   ...OTHER_TEMPLATES,
+];
+
+export const ALL_TEMPLATES: TemplateDefinition[] = [
+  ...ALL_CARD_TEMPLATES,
+  ...ALL_VIDEO_TEMPLATES,
 ];

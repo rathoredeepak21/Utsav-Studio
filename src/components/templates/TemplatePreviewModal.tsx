@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { TemplateDefinition } from '@/types/template';
 import { TemplateRenderer } from './engine/TemplateRenderer';
+import { VideoCardMotionPreview } from './VideoCardMotionPreview';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { DecorativeMotif } from '@/components/common/DecorativeMotif';
@@ -96,15 +97,19 @@ export function TemplatePreviewModal({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Left Visual Preview Container: Real JSON-Driven Template Renderer */}
+        {/* Left Visual Preview Container: Real JSON-Driven Template Renderer or Motion Video Preview */}
         <div className="md:w-1/2 bg-stone-950 relative min-h-[380px] md:min-h-[560px] flex items-center justify-center p-4 sm:p-6">
           <div className="relative w-full max-w-[300px] aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl border-2 border-gold-400/80 bg-stone-900">
-            <TemplateRenderer template={template} />
+            {template.type === 'video' ? (
+              <VideoCardMotionPreview template={template} isHovered={true} showControls={true} />
+            ) : (
+              <TemplateRenderer template={template} />
+            )}
 
             {/* Top Badge */}
             <div className="absolute top-3 left-3 z-30 pointer-events-none">
               <Badge variant="gold" className="font-bold shadow-md bg-gold-400 text-royal-950 text-xs">
-                100% FREE
+                {template.type === 'video' ? 'VIDEO REEL' : '100% FREE'}
               </Badge>
             </div>
           </div>
@@ -230,24 +235,33 @@ export function TemplatePreviewModal({
               href={editorUrl}
               variant="gold"
               size="lg"
-              className="w-full shadow-gold-glow justify-center text-base"
+              className="w-full shadow-gold-glow justify-center text-base font-bold"
               onClick={onClose}
             >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Customize This Template (शुरू करें)
+              {template.type === 'video' ? (
+                <>
+                  <Video className="w-4 h-4 mr-2" />
+                  Customize Video in Editor (निःशुल्क वीडियो बनाएं)
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Customize Card in Editor (निःशुल्क कार्ड बनाएं)
+                </>
+              )}
             </Button>
 
             <div className="flex items-center justify-between text-xs text-stone-500 px-1">
               <span className="flex items-center gap-1 text-emerald-700 font-medium">
                 <CheckCircle className="w-3.5 h-3.5" />
-                100% Free Forever
+                100% Free Forever • No Watermark
               </span>
               <Link
-                href="/card-editor"
+                href={template.type === 'video' ? '/video-editor' : '/card-editor'}
                 className="text-royal-900 hover:text-magenta-700 underline font-semibold"
                 onClick={onClose}
               >
-                Or Start Blank Canvas
+                {template.type === 'video' ? 'Or Blank Video Project' : 'Or Blank Canvas'}
               </Link>
             </div>
           </div>

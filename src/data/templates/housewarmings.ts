@@ -57,7 +57,7 @@ export const HOUSEWARMING_TEMPLATES: TemplateDefinition[] = [
     nameHindi: 'मंगल गृह प्रवेश वीडियो निमंत्रण',
     slug: 'mangal-griha-pravesh-video-reel',
     category: 'housewarming',
-    type: 'video',
+    type: 'card',
     languageSupport: ['en', 'hi'],
     defaultLanguage: 'hi',
     dimensions: { width: 1080, height: 1920 },

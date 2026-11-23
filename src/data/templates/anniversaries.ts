@@ -54,7 +54,7 @@ export const ANNIVERSARY_TEMPLATES: TemplateDefinition[] = [
     nameHindi: 'स्वर्ण जयंती 50वीं वर्षगांठ वीडियो',
     slug: 'golden-jubilee-50-years-video-reel',
     category: 'anniversary',
-    type: 'video',
+    type: 'card',
     languageSupport: ['en', 'hi'],
     defaultLanguage: 'hi',
     dimensions: { width: 1080, height: 1920 },

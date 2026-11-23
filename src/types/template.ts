@@ -1,3 +1,5 @@
+import type { VideoScene, AudioTrackConfig } from './videoEditor';
+
 export type EventCategory =
   | 'wedding'
   | 'birthday'
@@ -147,6 +149,8 @@ export interface TemplateDefinition {
   isPopular?: boolean;
   isTrending?: boolean;
   isNew?: boolean;
+  videoScenes?: VideoScene[];
+  audioConfig?: AudioTrackConfig;
 }
 
 // Backwards compatibility alias for components that import Template

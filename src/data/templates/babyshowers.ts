@@ -101,7 +101,7 @@ export const BABY_SHOWER_TEMPLATES: TemplateDefinition[] = [
     nameHindi: 'लल्लाबाई बेबी शॉवर वीडियो रील',
     slug: 'celestial-lullaby-baby-shower-reel',
     category: 'baby-shower',
-    type: 'video',
+    type: 'card',
     languageSupport: ['en', 'hi'],
     defaultLanguage: 'en',
     dimensions: { width: 1080, height: 1920 },

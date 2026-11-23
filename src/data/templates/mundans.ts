@@ -102,7 +102,7 @@ export const MUNDAN_TEMPLATES: TemplateDefinition[] = [
     nameHindi: 'दिव्य मुंडन संस्कार वीडियो रील',
     slug: 'divya-mundan-sanskar-video-reel',
     category: 'mundan',
-    type: 'video',
+    type: 'card',
     languageSupport: ['en', 'hi'],
     defaultLanguage: 'hi',
     dimensions: { width: 1080, height: 1920 },

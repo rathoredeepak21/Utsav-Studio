@@ -1,5 +1,6 @@
 import { VideoProject, VideoScene, VideoElement, TextVideoElement, StickerVideoElement, ShapeVideoElement, ImageVideoElement } from '@/types/videoEditor';
 import { computeElementState } from './animationMath';
+import { renderSceneParticles, createGoldenShimmerFill } from './motionGraphics';
 
 // Offscreen buffer canvases for scene transition compositing
 let offscreenCanvasA: HTMLCanvasElement | null = null;
@@ -143,7 +144,8 @@ function drawSceneBackground(
 function drawTextElement(
   ctx: CanvasRenderingContext2D,
   el: TextVideoElement,
-  visibleChars?: number
+  visibleChars?: number,
+  sceneElapsed?: number
 ) {
   let displayString = el.text;
   if (visibleChars !== undefined && visibleChars < el.text.length) {
@@ -152,16 +154,27 @@ function drawTextElement(
   if (!displayString) return;
 
   ctx.font = `${el.fontStyle || 'normal'} ${el.fontSize}px "${el.fontFamily || 'Noto Sans Devanagari'}", sans-serif`;
-  ctx.fillStyle = el.fill || '#FFFFFF';
-  ctx.textAlign = el.align || 'center';
-  ctx.textBaseline = 'top';
 
-  if (el.textShadow) {
+  if (el.motionPreset === 'golden_shimmer' && sceneElapsed !== undefined) {
+    ctx.fillStyle = createGoldenShimmerFill(ctx, 0, 0, el.width, sceneElapsed);
+  } else {
+    ctx.fillStyle = el.fill || '#FFFFFF';
+  }
+
+  if (el.motionPreset === 'royal_glow') {
+    ctx.shadowColor = '#FBBF24';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  } else if (el.textShadow) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
     ctx.shadowBlur = 12;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
   }
+
+  ctx.textAlign = el.align || 'center';
+  ctx.textBaseline = 'top';
 
   // Word wrap within element.width
   const words = displayString.split(' ');
@@ -280,6 +293,11 @@ function renderSingleScene(
   // 1. Draw Background
   drawSceneBackground(ctx, scene.background, width, height);
 
+  // 1.5. Render Background Continuous Particles
+  if (scene.particles && scene.particles.type !== 'none') {
+    renderSceneParticles(ctx, width, height, sceneElapsed, scene.particles);
+  }
+
   // 2. Sort and draw elements
   const sorted = [...scene.elements].sort((a, b) => a.zIndex - b.zIndex);
 
@@ -306,7 +324,7 @@ function renderSingleScene(
     ctx.translate(-el.width / 2, -el.height / 2);
 
     if (el.type === 'text') {
-      drawTextElement(ctx, el as TextVideoElement, computed.visibleTextLength);
+      drawTextElement(ctx, el as TextVideoElement, computed.visibleTextLength, sceneElapsed);
     } else if (el.type === 'sticker') {
       const sticker = el as StickerVideoElement;
       const img = getCachedImage(sticker.svgDataUri);
@@ -336,6 +354,23 @@ function renderSingleScene(
 
     ctx.restore();
   });
+
+  // 3. Foreground floating particles for depth (petals, confetti, sparkles)
+  if (
+    scene.particles &&
+    (scene.particles.type === 'falling_rose_petals' ||
+      scene.particles.type === 'falling_marigold_petals' ||
+      scene.particles.type === 'party_confetti' ||
+      scene.particles.type === 'floating_balloons')
+  ) {
+    ctx.save();
+    // Render lighter foreground overlay pass with slight speed offset
+    renderSceneParticles(ctx, width, height, sceneElapsed + 1.5, {
+      ...scene.particles,
+      intensity: 'subtle',
+    });
+    ctx.restore();
+  }
 }
 
 /**

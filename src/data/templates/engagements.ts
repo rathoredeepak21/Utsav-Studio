@@ -55,7 +55,7 @@ export const ENGAGEMENT_TEMPLATES: TemplateDefinition[] = [
     nameHindi: 'डायमंड स्पार्कल रिंग सेरेमनी रील',
     slug: 'sparkle-diamond-ring-ceremony-reel',
     category: 'engagement',
-    type: 'video',
+    type: 'card',
     languageSupport: ['en', 'hi'],
     defaultLanguage: 'en',
     dimensions: { width: 1080, height: 1920 },
